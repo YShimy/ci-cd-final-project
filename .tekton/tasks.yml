@@ -1,0 +1,98 @@
+# This file defines a Tekton Task based on your exercise.
+
+# 1. apiVersion
+apiVersion: tekton.dev/v1beta1
+
+# 2. kind
+kind: Task
+
+# 3. metadata.name
+metadata:
+  name: cleanup
+
+spec:
+  description: This task will clean up a workspace by deleting workspaces
+  
+  # 4. spec.workspaces
+  workspaces:
+    - name: source
+
+  # This task has a single step
+  steps:
+    # 1. step.name
+    - name: remove
+      # 2. step.image
+      image: alpine:3
+      
+      # 3. step.env
+      env:
+        - name: WORKSPACE_SOURCE_PATH
+          value: $(workspaces.source.path)
+          
+      # 4. step.workingDir
+      workingDir: $(workspaces.source.path)
+      
+      # 5. step.securityContext
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+        
+      # 6. step.script
+      script: |
+        #!/usr/bin/env sh
+        set -eu
+        echo "Removing all files from ${WORKSPACE_SOURCE_PATH}..."
+        # Delete any existing contents of the directory if it exists
+        #
+        # We don't just "rm -rf ${WORKSPACE_SOURCE_PATH}" because that would
+        # delete the source directory itself, which fails if it's a mount point.
+        if [ -d "${WORKSPACE_SOURCE_PATH}" ] ; then
+          # Delete non-hidden files and directories
+          rm -rf "${WORKSPACE_SOURCE_PATH:?}"/*
+          # Delete files and directories starting with . but excluding . and ..
+          rm -rf "${WORKSPACE_SOURCE_PATH:?}"/.[!.]*
+          # Delete files and directories starting with .. plus any other char
+          rm -rf "${WORKSPACE_SOURCE_PATH:?}"/..?*
+        fi
+---
+# This file defines a Tekton Task for running 'nose' tests.
+
+# 1. apiVersion
+apiVersion: tekton.dev/v1beta1
+
+# 2. kind
+kind: Task
+
+# 3. metadata.name
+metadata:
+  name: nose
+
+spec:
+  # 4. spec.workspaces
+  workspaces:
+    - name: source
+      
+  # 5. spec.params
+  params:
+    - name: args
+      description: Arguments to pass to nose
+      type: string
+      default: "-v"
+
+  # This task has a single step
+  steps:
+    # 1. step.name
+    - name: nosetests
+      # 2. step.image
+      image: python:3.9-slim
+      
+      # 3. step.workingDir
+      workingDir: $(workspaces.source.path)
+      
+      # 4. step.script
+      script: |
+        #!/bin/bash
+        set -e
+        python -m pip install --upgrade pip wheel
+        pip install -r requirements.txt
+        nosetests $(params.args)
